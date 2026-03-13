@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Code Reviewer — Powered by Gemini</title>
+  <meta name="description" content="Get instant AI-powered code reviews. Paste your code and receive expert analysis, bug detection, and improvement suggestions." />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg-primary: #0a0e1a;
+      --bg-secondary: #111827;
+      --bg-card: #1a2035;
+      --bg-input: #0f1629;
+      --border: #2a3352;
+      --border-focus: #6366f1;
+      --text-primary: #e5e7f0;
+      --text-secondary: #8892b0;
+      --text-muted: #5a6380;
+      --accent: #6366f1;
+      --accent-light: #818cf8;
+      --accent-glow: rgba(99, 102, 241, 0.3);
+      --success: #34d399;
+      --danger: #f87171;
+      --warning: #fbbf24;
+      --gradient-1: linear-gradient(135deg, #6366f1, #8b5cf6, #a78bfa);
+      --gradient-2: linear-gradient(135deg, #1a2035 0%, #111827 100%);
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Animated background */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(139, 92, 246, 0.06) 0%, transparent 50%),
+        radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.03) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* ===== HEADER ===== */
+    header {
+      padding: 28px 0 20px;
+      text-align: center;
+    }
+
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 10px;
+    }
+
+    .logo-icon {
+      width: 48px; height: 48px;
+      background: var(--gradient-1);
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      box-shadow: 0 8px 32px var(--accent-glow);
+      animation: float 3s ease-in-out infinite;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-4px); }
+    }
+
+    .logo h1 {
+      font-size: 28px;
+      font-weight: 800;
+      background: var(--gradient-1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.5px;
+    }
+
+    .subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+
+    /* ===== MAIN LAYOUT ===== */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      padding-bottom: 40px;
+      min-height: calc(100vh - 160px);
+    }
+
+    .panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .panel:hover {
+      border-color: rgba(99, 102, 241, 0.3);
+      box-shadow: 0 4px 30px rgba(99, 102, 241, 0.06);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--gradient-2);
+    }
+
+    .panel-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .panel-title .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent-glow);
+    }
+
+    .panel-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 0;
+    }
+
+    /* ===== CODE EDITOR ===== */
+    .code-area {
+      width: 100%;
+      flex: 1;
+      min-height: 400px;
+      background: var(--bg-input);
+      border: none;
+      outline: none;
+      color: var(--text-primary);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      line-height: 1.7;
+      padding: 20px;
+      resize: none;
+      transition: background 0.3s ease;
+    }
+
+    .code-area::placeholder {
+      color: var(--text-muted);
+      font-style: italic;
+    }
+
+    .code-area:focus {
+      background: rgba(15, 22, 41, 0.8);
+    }
+
+    /* ===== LANGUAGE SELECTOR ===== */
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 20px;
+      border-top: 1px solid var(--border);
+      background: var(--gradient-2);
+    }
+
+    .lang-select {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      padding: 8px 14px;
+      border-radius: 8px;
+      outline: none;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+
+    .lang-select:focus {
+      border-color: var(--accent);
+    }
+
+    /* ===== REVIEW BUTTON ===== */
+    .review-btn {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 12px 24px;
+      background: var(--gradient-1);
+      color: #fff;
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.3s ease, opacity 0.2s;
+      box-shadow: 0 4px 20px var(--accent-glow);
+    }
+
+    .review-btn:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 32px var(--accent-glow);
+    }
+
+    .review-btn:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .review-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .btn-icon {
+      font-size: 18px;
+    }
+
+    /* ===== SPINNER ===== */
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2.5px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* ===== REVIEW OUTPUT ===== */
+    .review-output {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+      font-size: 14px;
+      line-height: 1.8;
+      color: var(--text-secondary);
+      min-height: 400px;
+    }
+
+    .review-output .placeholder-msg {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      min-height: 350px;
+      text-align: center;
+      gap: 16px;
+    }
+
+    .placeholder-msg .icon {
+      font-size: 48px;
+      opacity: 0.3;
+    }
+
+    .placeholder-msg p {
+      font-size: 15px;
+      color: var(--text-muted);
+      max-width: 280px;
+    }
+
+    /* ===== REVIEW RENDERED MARKDOWN ===== */
+    .review-output h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin: 24px 0 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .review-output h2:first-child {
+      margin-top: 0;
+    }
+
+    .review-output h3 {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--accent-light);
+      margin: 18px 0 8px;
+    }
+
+    .review-output p {
+      margin-bottom: 10px;
+      color: var(--text-secondary);
+    }
+
+    .review-output ul, .review-output ol {
+      padding-left: 20px;
+      margin-bottom: 12px;
+    }
+
+    .review-output li {
+      margin-bottom: 6px;
+    }
+
+    .review-output code {
+      background: rgba(99, 102, 241, 0.1);
+      color: var(--accent-light);
+      padding: 2px 7px;
+      border-radius: 5px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+    }
+
+    .review-output pre {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      overflow-x: auto;
+      margin: 12px 0;
+    }
+
+    .review-output pre code {
+      background: none;
+      padding: 0;
+      color: var(--text-primary);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .review-output strong {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    .review-output em {
+      color: var(--warning);
+    }
+
+    /* ===== STATUS BAR ===== */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-top: 1px solid var(--border);
+      background: var(--gradient-2);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .status-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 6px rgba(52, 211, 153, 0.4);
+    }
+
+    .status-dot.error {
+      background: var(--danger);
+      box-shadow: 0 0 6px rgba(248, 113, 113, 0.4);
+    }
+
+    .status-dot.loading {
+      background: var(--warning);
+      box-shadow: 0 0 6px rgba(251, 191, 36, 0.4);
+      animation: pulse 1s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 900px) {
+      .main-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .code-area, .review-output {
+        min-height: 300px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <div class="logo">
+        <div class="logo-icon">🔍</div>
+        <h1>AI Code Reviewer</h1>
+      </div>
+      <p class="subtitle">Powered by Google Gemini — Instant code analysis & improvement suggestions</p>
+    </header>
+
+    <main class="main-grid">
+      <!-- Code Input Panel -->
+      <div class="panel" id="input-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="dot"></span>
+            Your Code
+          </div>
+        </div>
+        <div class="panel-body">
+          <textarea
+            class="code-area"
+            id="codeInput"
+            placeholder="// Paste your code here...&#10;// e.g.&#10;function add(a, b) {&#10;  return a - b; // bug here?&#10;}"
+            spellcheck="false"
+          ></textarea>
+        </div>
+        <div class="controls">
+          <select class="lang-select" id="langSelect">
+            <option value="auto">Auto-detect</option>
+            <option value="javascript">JavaScript</option>
+            <option value="python">Python</option>
+            <option value="java">Java</option>
+            <option value="cpp">C++</option>
+            <option value="csharp">C#</option>
+            <option value="go">Go</option>
+            <option value="rust">Rust</option>
+            <option value="typescript">TypeScript</option>
+            <option value="php">PHP</option>
+            <option value="ruby">Ruby</option>
+          </select>
+          <button class="review-btn" id="reviewBtn" onclick="submitReview()">
+            <span class="btn-icon">✨</span>
+            Review Code
+          </button>
+        </div>
+      </div>
+
+      <!-- Review Output Panel -->
+      <div class="panel" id="output-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span class="dot"></span>
+            AI Review
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="review-output" id="reviewOutput">
+            <div class="placeholder-msg">
+              <span class="icon">🤖</span>
+              <p>Paste your code on the left and click <strong>Review Code</strong> to get an AI-powered analysis.</p>
+            </div>
+          </div>
+        </div>
+        <div class="status-bar">
+          <span class="status-dot" id="statusDot"></span>
+          <span id="statusText">Ready</span>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const API_URL = 'http://localhost:3000/ai/get-response';
+
+    async function submitReview() {
+      const codeInput = document.getElementById('codeInput');
+      const reviewOutput = document.getElementById('reviewOutput');
+      const reviewBtn = document.getElementById('reviewBtn');
+      const statusDot = document.getElementById('statusDot');
+      const statusText = document.getElementById('statusText');
+      const langSelect = document.getElementById('langSelect');
+
+      const code = codeInput.value.trim();
+      if (!code) {
+        reviewOutput.innerHTML = '<div class="placeholder-msg"><span class="icon">⚠️</span><p>Please paste some code to review.</p></div>';
+        return;
+      }
+
+      // Loading state
+      reviewBtn.disabled = true;
+      reviewBtn.innerHTML = '<div class="spinner"></div> Analyzing...';
+      statusDot.className = 'status-dot loading';
+      statusText.textContent = 'Analyzing your code...';
+      reviewOutput.innerHTML = '<div class="placeholder-msg"><span class="icon" style="animation: float 1.5s ease-in-out infinite;">🔍</span><p>Gemini is reviewing your code...</p></div>';
+
+      const lang = langSelect.value;
+      const prompt = lang !== 'auto' ? `Language: ${lang}\n\n${code}` : code;
+
+      try {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: prompt }),
+        });
+
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.error || 'Server error');
+        }
+
+        const data = await response.json();
+        reviewOutput.innerHTML = renderMarkdown(data.review);
+        statusDot.className = 'status-dot';
+        statusText.textContent = 'Review complete';
+      } catch (error) {
+        reviewOutput.innerHTML = `<div class="placeholder-msg"><span class="icon">❌</span><p><strong>Error:</strong> ${error.message}</p><p style="font-size:12px;margin-top:8px;">Make sure the backend is running on port 3000.</p></div>`;
+        statusDot.className = 'status-dot error';
+        statusText.textContent = 'Error occurred';
+      } finally {
+        reviewBtn.disabled = false;
+        reviewBtn.innerHTML = '<span class="btn-icon">✨</span> Review Code';
+      }
+    }
+
+    // Simple markdown renderer
+    function renderMarkdown(text) {
+      if (!text) return '<p>No review generated.</p>';
+
+      let html = text
+        // Code blocks ``` ... ```
+        .replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+          return `<pre><code>${escapeHtml(code.trim())}</code></pre>`;
+        })
+        // Inline code
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        // H2
+        .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+        // H3
+        .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+        // Bold
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        // Italic
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        // Unordered lists
+        .replace(/^- (.+)$/gm, '<li>$1</li>')
+        // Ordered lists
+        .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+        // Wrap consecutive <li> in <ul>
+        .replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>')
+        // Paragraphs
+        .replace(/\n\n/g, '</p><p>')
+        // Line breaks
+        .replace(/\n/g, '<br>');
+
+      return `<p>${html}</p>`;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Allow Tab key in textarea
+    document.getElementById('codeInput').addEventListener('keydown', function(e) {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const start = this.selectionStart;
+        const end = this.selectionEnd;
+        this.value = this.value.substring(0, start) + '  ' + this.value.substring(end);
+        this.selectionStart = this.selectionEnd = start + 2;
+      }
+    });
+  </script>
+
+</body>
+</html>
